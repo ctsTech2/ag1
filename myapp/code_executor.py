@@ -6,6 +6,7 @@ temp_dir = tempfile.TemporaryDirectory()
 
 # Create a Docker command line code executor.
 executor = DockerCommandLineCodeExecutor(
+    
     image="python:3.12-slim",  # Execute code using the given docker image name.
     timeout=10,  # Timeout for each code execution in seconds.
     work_dir=temp_dir.name,  # Use the temporary directory to store the code files.
