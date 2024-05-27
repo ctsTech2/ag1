@@ -1,22 +1,31 @@
-# A rabbit hole with gpt 4. Where we tried to Run code. With Docker inside of Docker. Instead of just running Autogen with a Docker executor in a conda environment. Gpt 4 wanted to use user proxy Instead of converseable agent Because user proxy is a common base template where not much configuration is needed import os
+import os
 from pathlib import Path
-from autogen import ConversableAgent, UserProxyAgent
+from dotenv import load_dotenv
+from autogen import ConversableAgent
 from autogen.coding import DockerCommandLineCodeExecutor
+import datetime
+
+# Load environment variables from the .env file
+load_dotenv()
+
+# Ensure the OpenAI API key is loaded
+if "OPENAI_API_KEY" not in os.environ:
+    raise ValueError("OPENAI_API_KEY environment variable not set")
 
 # Create a directory for code execution if it doesn't exist
 work_dir = Path("coding")
 work_dir.mkdir(exist_ok=True)
 print(f"Directory for code execution created at: {work_dir}")
 
-# Set up the Docker command line code executor with your existing Docker image
+# Set up the Docker command line code executor
 executor = DockerCommandLineCodeExecutor(
     image="autogen_custom_img",  # Use your existing Docker image
-    timeout=10,  # Timeout for each code execution in seconds
+    timeout=60,  # Timeout for each code execution in seconds
     work_dir=work_dir  # Use the persistent directory to store the code files
 )
 print("DockerCommandLineCodeExecutor has been set up")
 
-# Define the code writer agent
+# Define the code writer agent's system message to instruct the LLM on how to use the code executor in the code executor agent.
 code_writer_system_message = """You are a helpful AI assistant.
 Solve tasks using your coding and language skills.
 In the following cases, suggest python code (in a python coding block) or shell script (in a sh coding block) for the user to execute.
@@ -30,6 +39,7 @@ When you find an answer, verify the answer carefully. Include verifiable evidenc
 Reply 'TERMINATE' in the end when everything is done.
 """
 
+# Create the code writer agent
 code_writer_agent = ConversableAgent(
     "code_writer_agent",
     system_message=code_writer_system_message,
@@ -38,37 +48,38 @@ code_writer_agent = ConversableAgent(
 )
 print("Code writer agent has been created.")
 
-# Define the code executor agent
-code_executor_agent = UserProxyAgent(
-    name="code_executor_agent",
-    code_execution_config={"executor": executor},
+# Create the code executor agent
+code_executor_agent = ConversableAgent(
+    "code_executor_agent",
+    llm_config=False,  # Turn off LLM for this agent.
+    code_execution_config={"executor": executor},  # Use the Docker command line code executor.
+    human_input_mode="ALWAYS",  # Always take human input for this agent for safety.
 )
 print("Code executor agent has been created and configured")
 
-# Log the work directory content before execution
-print(f"Contents of work directory before execution: {list(work_dir.iterdir())}")
+# Get the current date for the message
+today = datetime.datetime.now().strftime("%Y-%m-%d")
 
 # Initiate a conversation between the code writer agent and the code executor agent
 chat_result = code_executor_agent.initiate_chat(
     code_writer_agent,
-    message="Write Python code to calculate the 14th Fibonacci number.",
+    message=f"Today is {today}. Write Python code to plot TSLA's and META's stock price gains YTD, and save the plot to a file named 'stock_gains.png'.",
 )
 
 # Print the chat result
 print(chat_result)
 
-# Log the work directory content after execution
-print(f"Contents of work directory after execution: {list(work_dir.iterdir())}")
+# Execute the generated script
+generated_script_path = work_dir / "stock_gains_plot.py"
+with open(generated_script_path, "w") as script_file:
+    script_file.write(chat_result.chat_history[-1]['content'])
 
-# Check the contents of the temporary code file if it exists
-tmp_files = list(work_dir.glob("*.py"))
-if tmp_files:
-    for tmp_file in tmp_files:
-        with open(tmp_file, 'r') as file:
-            print(f"Contents of {tmp_file.name}:")
-            print(file.read())
-else:
-    print("No temporary code files found in the work directory.")
+# Execute the script using Docker
+executor.execute_code_blocks([{"content": f"python {generated_script_path}", "language": "python"}])
+
+# Stop the Docker command line code executor to release the resources
+executor.stop()
+print("DockerCommandLineCodeExecutor has been stopped")
 
 # End of script
-print("code_execution_conversation.py script execution completed")
+print("Script execution completed")
