@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from autogen import ConversableAgent, GroupChat, GroupChatManager
+import pprint  # Import pprint for pretty-printing
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -51,36 +52,42 @@ divider_agent = ConversableAgent(
     human_input_mode="NEVER"
 )
 
-# Create a GroupChat object with auto speaker selection method
-group_chat = GroupChat(
+# Create a GroupChat object with introductions
+group_chat_with_introductions = GroupChat(
     agents=[adder_agent, multiplier_agent, subtracter_agent, divider_agent, number_agent],
     messages=[],
-    max_round=10,  # Increased rounds to allow for more interactions
+    max_round=6,
     send_introductions=True,
 )
 
-# Create a GroupChatManager object
-group_chat_manager = GroupChatManager(
-    groupchat=group_chat,
+# Create a GroupChatManager object with introductions
+group_chat_manager_with_intros = GroupChatManager(
+    groupchat=group_chat_with_introductions,
     llm_config={"config_list": [{"model": "gpt-4o", "api_key": api_key}]},
 )
 
-# Start the group chat
-chat_result = number_agent.initiate_chat(
-    group_chat_manager,
-    message="My number is 3, I want to turn it into 13. Use each other's outputs to reach the goal.",
-    summary_method="reflection_with_llm",
+# Start a sequence of two-agent chats between the number agent and the group chat manager
+chat_results = number_agent.initiate_chats(
+    [
+        {
+            "recipient": group_chat_manager_with_intros,
+            "message": "My number is 3, I want to turn it into 13. Use each other's outputs to reach the goal.",
+            "clear_history": False,  # Retain history for subsequent chats
+        },
+        {
+            "recipient": group_chat_manager_with_intros,
+            "message": "Turn this number to 32.",
+            "clear_history": False,  # Retain history for subsequent chats
+        },
+    ]
 )
 
-# # Print the chat summary
-# print("Chat Summary:")
-# print(chat_result.summary)
-
-# # Print the chat history
-# print("\nChat History:")
-# import pprint
-# pprint.pprint(chat_result.chat_history)
-
-# # Print the cost of the chat
-# print("\nChat Cost:")
-# pprint.pprint(chat_result.cost)
+# # Print the summaries of each chat
+# for i, result in enumerate(chat_results, start=1):
+#     print(f"Chat {i} Summary:")
+#     print(result.summary)
+#     print("\nChat History:")
+#     pprint.pprint(result.chat_history)
+#     print("\nChat Cost:")
+#     pprint.pprint(result.cost)
+#     print("\n" + "="*80 + "\n")

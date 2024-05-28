@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from autogen import ConversableAgent, GroupChat, GroupChatManager
+import pprint  # Import pprint for pretty-printing
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -51,36 +52,44 @@ divider_agent = ConversableAgent(
     human_input_mode="NEVER"
 )
 
-# Create a GroupChat object with auto speaker selection method
-group_chat = GroupChat(
+# Define the allowed transitions for each agent using agent objects
+allowed_transitions = {
+    number_agent: [adder_agent, number_agent],
+    adder_agent: [multiplier_agent, number_agent],
+    subtracter_agent: [divider_agent, number_agent],
+    multiplier_agent: [subtracter_agent, number_agent],
+    divider_agent: [adder_agent, number_agent],
+}
+
+# Create a GroupChat object with allowed transitions
+constrained_graph_chat = GroupChat(
     agents=[adder_agent, multiplier_agent, subtracter_agent, divider_agent, number_agent],
+    allowed_or_disallowed_speaker_transitions=allowed_transitions,
+    speaker_transitions_type="allowed",
     messages=[],
-    max_round=10,  # Increased rounds to allow for more interactions
+    max_round=12,
     send_introductions=True,
 )
 
 # Create a GroupChatManager object
-group_chat_manager = GroupChatManager(
-    groupchat=group_chat,
+constrained_group_chat_manager = GroupChatManager(
+    groupchat=constrained_graph_chat,
     llm_config={"config_list": [{"model": "gpt-4o", "api_key": api_key}]},
 )
 
-# Start the group chat
+# Initiate the chat
 chat_result = number_agent.initiate_chat(
-    group_chat_manager,
-    message="My number is 3, I want to turn it into 13. Use each other's outputs to reach the goal.",
+    constrained_group_chat_manager,
+    message="My number is 3, I want to turn it into 10. Once I get to 10, keep it there.",
     summary_method="reflection_with_llm",
 )
 
-# # Print the chat summary
+# # Print the chat summary and history
 # print("Chat Summary:")
 # print(chat_result.summary)
 
-# # Print the chat history
 # print("\nChat History:")
-# import pprint
 # pprint.pprint(chat_result.chat_history)
 
-# # Print the cost of the chat
 # print("\nChat Cost:")
 # pprint.pprint(chat_result.cost)
